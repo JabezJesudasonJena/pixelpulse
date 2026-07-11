@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Socket Test</title>
+    <!-- Import the Socket.io client library via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h2>Check your console.</h2>
+    <input type="text" id="msgInput" placeholder="Type a message...">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        // Connect to your local server
+        const socket = io("http://localhost:3001");
+
+        socket.on("connect", () => {
+            console.log("Connected to server with ID:", socket.id);
+        });
+
+        // Listen for broadcasts from the server
+        socket.on("receive_message", (data) => {
+            console.log("Broadcast received:", data);
+        });
+
+        // Function to emit a message
+        function sendMessage() {
+            const text = document.getElementById('msgInput').value;
+            socket.emit("send_message", { text: text });
+        }
+    </script>
+</body>
+</html>
