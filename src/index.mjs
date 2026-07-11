@@ -10,31 +10,25 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: "*", // Keep open for local testing; restrict this in production
+        origin: "*", // Orgin allow for testing 
         methods: ["GET", "POST"]
     }
 });
 
 io.on('connection', (socket) => {
-    console.log(`[+] User connected: ${socket.id}`);
+    console.log(`Player joined PixelPulse: ${socket.id}`);
 
-    // 1. Listen for a basic chat message from this specific client
     socket.on('send_message', (data) => {
-        console.log(`[Message] ${socket.id}: ${data.text}`);
-        
-        // 2. Broadcast that message to ALL connected clients
-        io.emit('receive_message', {
-            sender: socket.id, 
-            text: data.text
-        });
+        console.log(`Message from ${socket.id}:`, data.text);        
+        io.emit("receive_message", data);
     });
-    // 3. Handle the disconnect event natively
-    socket.on('disconnect', () => {
-        console.log(`[-] User disconnected: ${socket.id}`);
+    
+    socket.on("disconnect", () => {
+        console.log(`Player left: ${socket.id}`);
     });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log("PixelPulse server is running on port 3001");
 });

@@ -2,33 +2,95 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Socket Test</title>
-    <!-- Import the Socket.io client library via CDN -->
+    <title>PixelPulse</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            background-color: #1a1a24;
+            color: white;
+            font-family: sans-serif;
+            text-align: center;
+            margin-top: 30px;
+        }
+        /* Style the canvas so it looks like a game screen */
+        canvas {
+            background-color: #0d0d14;
+            border: 2px solid #3a3a5c;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+            margin-bottom: 20px;
+        }
+        input {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #222;
+            color: white;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #00d2ff;
+            border: none;
+            border-radius: 4px;
+            color: black;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
-    <h2>Check your console.</h2>
-    <input type="text" id="msgInput" placeholder="Type a message...">
-    <button onclick="sendMessage()">Send</button>
+    <h2>PixelPulse</h2>
+    
+    <!-- The Game Screen -->
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- Keeping your test chat box -->
+    <div>
+        <input type="text" id="msgInput" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
 
     <script>
-        // Connect to your local server
+        // ==========================================
+        // 1. SOCKET SETUP
+        // ==========================================
         const socket = io("http://localhost:3001");
 
         socket.on("connect", () => {
-            console.log("Connected to server with ID:", socket.id);
+            console.log("Connected to PixelPulse server:", socket.id);
         });
 
-        // Listen for broadcasts from the server
         socket.on("receive_message", (data) => {
             console.log("Broadcast received:", data);
         });
 
-        // Function to emit a message
         function sendMessage() {
             const text = document.getElementById('msgInput').value;
             socket.emit("send_message", { text: text });
         }
+
+        // ==========================================
+        // 2. CANVAS SETUP
+        // ==========================================
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d"); // The tool we use to draw
+
+        // A simple function to draw a player
+        function drawPlayer(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, 30, 30); // x, y, width, height
+        }
+
+        // The main render function that updates the screen
+        function render() {
+            // 1. Clear the old frame (so shapes don't smear)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 2. Draw our test player at coordinates (X: 100, Y: 100)
+            drawPlayer(100, 100, "#00d2ff"); 
+        }
+
+        // Call render once to draw the initial screen
+        render();
     </script>
 </body>
 </html>
