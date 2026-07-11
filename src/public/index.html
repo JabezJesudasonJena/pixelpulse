@@ -2,95 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PixelPulse</title>
+    <title>Room Architecture Test</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body {
-            background-color: #1a1a24;
-            color: white;
-            font-family: sans-serif;
-            text-align: center;
-            margin-top: 30px;
-        }
-        /* Style the canvas so it looks like a game screen */
-        canvas {
-            background-color: #0d0d14;
-            border: 2px solid #3a3a5c;
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
-            margin-bottom: 20px;
-        }
-        input {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #555;
-            background: #222;
-            color: white;
-        }
-        button {
-            padding: 8px 16px;
-            background-color: #00d2ff;
-            border: none;
-            border-radius: 4px;
-            color: black;
-            font-weight: bold;
-            cursor: pointer;
-        }
+        body { font-family: monospace; background-color: #121212; color: #fff; padding: 20px; }
+        input, button { padding: 8px; margin: 5px 0; background: #333; color: white; border: 1px solid #555; }
+        button { cursor: pointer; background: #444; }
+        button:hover { background: #555; }
+        #chatArea { display: none; margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
+        #logs { background: #1e1e1e; padding: 10px; height: 250px; overflow-y: scroll; margin-bottom: 10px; border: 1px solid #333; }
+        .system { color: #888; }
+        .room { color: #4CAF50; }
+        .chat { color: #2196F3; }
+        .error { color: #f44336; }
     </style>
 </head>
 <body>
-    <h2>PixelPulse</h2>
+    <h2>Room Management Node</h2>
     
-    <!-- The Game Screen -->
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="lobbyArea">
+        <button onclick="createRoom()">Create New Room</button>
+        <br><br>
+        <input type="text" id="roomInput" placeholder="Enter 6-char Room Code">
+        <button onclick="joinRoom()">Join Room</button>
+    </div>
 
-    <!-- Keeping your test chat box -->
-    <div>
-        <input type="text" id="msgInput" placeholder="Type a message...">
-        <button onclick="sendMessage()">Send</button>
+    <div id="roomInfo" style="margin-top: 20px; font-weight: bold; color: #ffeb3b;"></div>
+
+    <div id="chatArea">
+        <div id="logs"></div>
+        <input type="text" id="msgInput" placeholder="Type message here...">
+        <button onclick="sendMessage()">Send to Room</button>
     </div>
 
     <script>
-        // ==========================================
-        // 1. SOCKET SETUP
-        // ==========================================
         const socket = io("http://localhost:3001");
+        
+        // DOM Elements
+        const logsDiv = document.getElementById('logs');
+        const lobbyArea = document.getElementById('lobbyArea');
+        const chatArea = document.getElementById('chatArea');
+        const roomInfo = document.getElementById('roomInfo');
 
+        // Helper to print colored logs
+        function logMessage(msg, type = 'system') {
+            logsDiv.innerHTML += `<div class="${type}">${msg}</div>`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Socket Connection
         socket.on("connect", () => {
-            console.log("Connected to PixelPulse server:", socket.id);
+            logMessage(`[Connected] Socket ID: ${socket.id}`, 'system');
         });
 
-        socket.on("receive_message", (data) => {
-            console.log("Broadcast received:", data);
+        // Room Events
+        socket.on("room_created", (data) => {
+            roomInfo.innerText = `Hosting Room: ${data.roomCode}`;
+            logMessage(`[Success] Room created: ${data.roomCode}`, 'room');
+            enterRoomUI();  
         });
+
+        socket.on("room_joined", (data) => {
+            roomInfo.innerText = `Connected to Room: ${data.roomCode}`;
+            logMessage(`[Success] Joined room: ${data.roomCode}`, 'room');
+            enterRoomUI();
+        });
+
+        socket.on("player_joined", (data) => {
+            logMessage(`[Event] Player ${data.playerId} joined. (${data.playerCount}/5)`, 'room');
+        });
+
+        socket.on("player_left", (data) => {
+            logMessage(`[Event] Player ${data.playerId} disconnected. (${data.playerCount}/5)`, 'room');
+        });
+
+        // Chat Events
+        socket.on("receive_message", (data) => {
+            const senderName = data.sender === socket.id ? "You" : data.sender.substring(0,5);
+            logMessage(`[${senderName}]: ${data.text}`, 'chat');
+        });
+
+        socket.on("error", (data) => {
+            logMessage(`[Error] ${data.message}`, 'error');
+            alert(data.message);
+        });
+
+        // Emit Actions
+        function createRoom() {
+            socket.emit("create_room");
+        }
+
+        function joinRoom() {
+            const code = document.getElementById('roomInput').value.trim();
+            if (!code) return alert("Room code cannot be empty.");
+            socket.emit("join_room", { roomCode: code });
+        }
 
         function sendMessage() {
-            const text = document.getElementById('msgInput').value;
-            socket.emit("send_message", { text: text });
+            const input = document.getElementById('msgInput');
+            if (!input.value.trim()) return;
+            socket.emit("send_message", { text: input.value.trim() });
+            input.value = '';
         }
 
-        // ==========================================
-        // 2. CANVAS SETUP
-        // ==========================================
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d"); // The tool we use to draw
-
-        // A simple function to draw a player
-        function drawPlayer(x, y, color) {
-            ctx.fillStyle = color;
-            ctx.fillRect(x, y, 30, 30); // x, y, width, height
+        // UI Transition
+        function enterRoomUI() {
+            lobbyArea.style.display = 'none';
+            chatArea.style.display = 'block';
         }
-
-        // The main render function that updates the screen
-        function render() {
-            // 1. Clear the old frame (so shapes don't smear)
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 2. Draw our test player at coordinates (X: 100, Y: 100)
-            drawPlayer(100, 100, "#00d2ff"); 
-        }
-
-        // Call render once to draw the initial screen
-        render();
     </script>
 </body>
 </html>
