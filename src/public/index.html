@@ -28,6 +28,12 @@
     </div>
 
     <div id="roomInfo" style="margin-top: 20px; font-weight: bold; color: #ffeb3b;"></div>
+    <div id="gameArea" style="display: none; margin-top: 20px; border: 1px solid #ff9800; padding: 10px;">
+        <button id="startBtn" onclick="startGame()">Start Game</button>
+        <h3 id="timerDisplay" style="color: #ff9800;">Time: 60</h3>
+        <h3 id="wordDisplay">Word: Waiting...</h3>
+        <h4 id="roleDisplay">Role: Guesser</h4>
+    </div>
 
     <div id="chatArea">
         <div id="logs"></div>
@@ -104,12 +110,52 @@
             socket.emit("send_message", { text: input.value.trim() });
             input.value = '';
         }
+        // New DOM Elements
+        const gameArea = document.getElementById('gameArea');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const wordDisplay = document.getElementById('wordDisplay');
+        const roleDisplay = document.getElementById('roleDisplay');
+        const startBtn = document.getElementById('startBtn');
 
-        // UI Transition
+        // Update enterRoomUI to show the game area
         function enterRoomUI() {
             lobbyArea.style.display = 'none';
             chatArea.style.display = 'block';
+            gameArea.style.display = 'block';
         }
+
+        function startGame() {
+            socket.emit("start_game");
+        }
+
+        // Game Loop Events
+        socket.on("round_start", (data) => {
+            startBtn.style.display = 'none'; // Hide start button once game begins
+            logsDiv.innerHTML = ''; // Clear chat for new round
+            
+            if (socket.id === data.drawerId) {
+                roleDisplay.innerText = "Role: You are DRAWING!";
+                roleDisplay.style.color = "#4CAF50";
+            } else {
+                roleDisplay.innerText = "Role: You are GUESSING!";
+                roleDisplay.style.color = "#2196F3";
+                wordDisplay.innerText = `Word: ${"_ ".repeat(data.wordLength)}`;
+            }
+            logMessage(`[System] Round started!`, 'system');
+        });
+
+        socket.on("drawer_word", (data) => {
+            wordDisplay.innerText = `Word to draw: ${data.word}`;
+        });
+
+        socket.on("time_update", (data) => {
+            timerDisplay.innerText = `Time: ${data.timeLeft}`;
+        });
+
+        socket.on("round_end", (data) => {
+            logMessage(`[System] Round over! The word was: ${data.word}`, 'room');
+            wordDisplay.innerText = `Word: ${data.word}`;
+        });
     </script>
 </body>
 </html>
