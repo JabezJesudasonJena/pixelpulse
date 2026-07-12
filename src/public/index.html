@@ -2,52 +2,288 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Room Architecture Test</title>
+    <title>Draw & Guess</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { font-family: monospace; background-color: #121212; color: #fff; padding: 20px; }
-        input, button { padding: 8px; margin: 5px 0; background: #333; color: white; border: 1px solid #555; }
-        button { cursor: pointer; background: #444; }
-        button:hover { background: #555; }
-        #chatArea { display: none; margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
-        #logs { background: #1e1e1e; padding: 10px; height: 250px; overflow-y: scroll; margin-bottom: 10px; border: 1px solid #333; }
-        .system { color: #888; }
-        .room { color: #4CAF50; }
-        .chat { color: #2196F3; }
-        .error { color: #f44336; }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;600&display=swap');
+
+        :root {
+            /* Aggressive Dark Theme */
+            --bg: #09090b;
+            --surface: #18181b;
+            --surface-hover: #27272a;
+            --border: #3f3f46;
+            
+            /* High Contrast Palette */
+            --primary: #f97316; /* Neon Orange */
+            --primary-hover: #ea580c;
+            --accent: #10b981; /* Success Green */
+            --danger: #ef4444;
+            --warning: #fbbf24;
+            
+            --text-main: #fafafa;
+            --text-muted: #a1a1aa;
+            --radius: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text-main); 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden; /* Prevent scroll from background */
+        }
+
+        /* The Background Drawing Animation */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+        
+        .bg-animation path {
+            stroke: var(--primary);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 2000;
+            stroke-dashoffset: 2000;
+            animation: drawLine 15s linear infinite;
+        }
+
+        @keyframes drawLine {
+            0% { stroke-dashoffset: 2000; }
+            50% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -2000; }
+        }
+
+        h2 { 
+            margin: 30px 0; 
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 32px;
+            font-weight: 700; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            color: var(--text-main); 
+            text-shadow: 0 0 15px rgba(249, 115, 22, 0.3);
+        }
+        h2 span { color: var(--primary); }
+
+        /* Form Elements - Chunkier & Bigger */
+        input, button { 
+            font-family: inherit; 
+            padding: 16px 20px; 
+            border-radius: 12px; 
+            border: none; 
+            font-size: 16px;
+            font-weight: 600;
+            outline: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        input { 
+            background: rgba(0,0,0,0.5); 
+            border: 2px solid var(--border); 
+            color: white; 
+            width: 100%; 
+        }
+        input:focus { 
+            border-color: var(--primary); 
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.2); 
+        }
+        
+        button { 
+            background: var(--primary); 
+            color: #000; /* Black text on orange for maximum pop */
+            cursor: pointer; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover { 
+            background: var(--primary-hover); 
+            transform: translateY(-2px); 
+            box-shadow: 0 5px 15px rgba(249, 115, 22, 0.3);
+        }
+        button:active { transform: translateY(0); }
+
+        /* Layout Panels */
+        .panel {
+            background: rgba(24, 24, 27, 0.85); /* Semi-transparent for background effect */
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            border: 1px solid var(--border);
+        }
+
+        /* Lobby */
+        #lobbyArea { text-align: center; width: 400px; margin-top: 15vh; }
+        .divider { margin: 24px 0; color: var(--text-muted); font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
+
+        /* Main Game Layout */
+        #mainApp {
+            display: none; 
+            grid-template-columns: 280px auto 350px;
+            gap: 24px;
+            width: 98vw;
+            max-width: 1450px; /* Wider for bigger canvas */
+            height: 82vh;
+        }
+
+        /* Left Column: Info & Leaderboard */
+        .left-col { display: flex; flex-direction: column; gap: 24px; }
+        #roomInfo { font-size: 14px; color: var(--text-muted); text-align: center; letter-spacing: 1px; }
+        .status-box { text-align: center; }
+        #timerDisplay { 
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 48px; 
+            font-weight: 700; 
+            color: var(--text-main); 
+            margin: 15px 0; 
+        }
+        #wordDisplay { 
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px; 
+            letter-spacing: 5px; 
+            font-weight: 700; 
+            margin-bottom: 15px; 
+            color: var(--warning);
+        }
+        #roleDisplay { 
+            font-size: 15px; 
+            font-weight: 600; 
+            padding: 8px 16px; 
+            border-radius: 20px; 
+            background: rgba(255,255,255,0.05); 
+            display: inline-block; 
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #leaderboard { flex-grow: 1; overflow-y: auto; }
+        #scoreList li {
+            background: rgba(0,0,0,0.4);
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 15px;
+            font-weight: 600;
+            border-left: 4px solid var(--border);
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Center Column: Canvas */
+        #canvasArea { display: flex; flex-direction: column; gap: 15px; align-items: center; justify-content: center; }
+        canvas {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            cursor: crosshair;
+        }
+        #clearBtn { background: var(--surface-hover); color: var(--text-main); width: auto; align-self: flex-end; font-size: 14px;}
+        #clearBtn:hover { background: var(--danger); color: white; border-color: var(--danger); box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+        
+        #startBtn { width: 100%; padding: 20px; font-size: 20px; background: var(--accent); color: #000; margin-bottom: 15px;}
+        #startBtn:hover { background: #0ea5e9; box-shadow: 0 5px 20px rgba(16, 185, 129, 0.4); }
+
+        /* Right Column: Chat */
+        #chatArea { display: flex; flex-direction: column; }
+        #logs {
+            flex-grow: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 2px solid var(--border);
+        }
+        .chat-input-group { display: flex; gap: 12px; }
+        .chat-input-group button { white-space: nowrap; padding: 0 24px; }
+
+        /* Chat Message Styles */
+        .msg-block { padding: 10px 14px; border-radius: 8px; font-size: 15px; animation: slideIn 0.2s ease-out; word-wrap: break-word; line-height: 1.4; }
+        .msg-block strong { opacity: 0.9; margin-right: 6px; }
+        .system { background: rgba(161, 161, 170, 0.1); color: var(--text-muted); border-left: 4px solid var(--text-muted); }
+        .room { background: rgba(16, 185, 129, 0.15); color: var(--accent); border-left: 4px solid var(--accent); }
+        
+        /* User chat uses border matching primary theme */
+        .chat { background: rgba(255,255,255,0.05); color: var(--text-main); border-left: 4px solid var(--border); }
+        
+        .error { background: rgba(239, 68, 68, 0.15); color: var(--danger); border-left: 4px solid var(--danger); }
+
+        /* Animations */
+        @keyframes slideIn { from { opacity: 0; transform: translateX(15px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulseTime { 0% { transform: scale(1); } 50% { transform: scale(1.15); color: var(--danger); text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); } 100% { transform: scale(1); } }
+        
+        .time-low { animation: pulseTime 1s infinite; }
     </style>
 </head>
 <body>
-    <h2>Room Management Node</h2>
+    <!-- Abstract continuous drawing background animation -->
+    <svg class="bg-animation" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d="M-10,50 Q20,-20 50,50 T110,50 M110,20 Q80,120 50,50 T-10,80 M20,110 Q50,-20 80,110 M-10,-10 L110,110" />
+    </svg>
+
+    <h2><span>Draw</span> & Guess</h2>
     
-    <div id="lobbyArea">
-        <button onclick="createRoom()">Create New Room</button>
-        <br><br>
-        <input type="text" id="roomInput" placeholder="Enter 6-char Room Code">
-        <button onclick="joinRoom()">Join Room</button>
+    <!-- LOBBY -->
+    <div id="lobbyArea" class="panel">
+        <button style="width: 100%;" onclick="createRoom()">Host New Game</button>
+        <div class="divider">or</div>
+        <input type="text" id="roomInput" placeholder="Enter 6-char Room Code" style="margin-bottom: 15px; text-align: center; text-transform: uppercase; font-size: 18px; letter-spacing: 2px;">
+        <button style="width: 100%; background: var(--surface-hover); color: var(--text-main); border: 2px solid var(--border);" onclick="joinRoom()">Join Game</button>
     </div>
 
-    <div id="roomInfo" style="margin-top: 20px; font-weight: bold; color: #ffeb3b;"></div>
-    <div id="gameArea" style="display: none; margin-top: 20px; border: 1px solid #ff9800; padding: 10px;">
-        <button id="startBtn" onclick="startGame()">Start Game</button>
-        <h3 id="timerDisplay" style="color: #ff9800;">Time: 60</h3>
-        <h3 id="wordDisplay">Word: Waiting...</h3>
-        <h4 id="roleDisplay">Role: Guesser</h4>
-    </div>
-    <div id="leaderboard" style="float: right; width: 150px; background: #222; padding: 10px; border: 1px solid #444;">
-        <h4>Scores</h4>
-        <ul id="scoreList" style="list-style: none; padding: 0; margin: 0;"></ul>
-    </div>
-    <div id="canvasArea" style="display: none; margin-top: 20px;">
-        <canvas id="gameCanvas" width="600" height="400" style="background: white; border: 2px solid #333; cursor: crosshair;"></canvas>
-        <br>
-        <button id="clearBtn" onclick="requestClearCanvas()">Clear Canvas</button>
-    </div>
+    <!-- MAIN APP GRID -->
+    <div id="mainApp">
+        
+        <!-- Left Panel: Info & Scores -->
+        <div class="left-col">
+            <div class="panel status-box">
+                <button id="startBtn" onclick="startGame()">Start Match</button>
+                <div id="roomInfo">Room: Waiting...</div>
+                <h3 id="timerDisplay">60</h3>
+                <h3 id="wordDisplay">_ _ _ _</h3>
+                <div id="roleDisplay">Waiting for players</div>
+            </div>
+            
+            <div id="leaderboard" class="panel">
+                <h4 style="margin-bottom: 20px; color: var(--primary); text-transform: uppercase; font-size: 14px; letter-spacing: 2px;">Leaderboard</h4>
+                <ul id="scoreList" style="list-style: none;"></ul>
+            </div>
+        </div>
 
-    <div id="chatArea">
-        <div id="logs"></div>
-        <input type="text" id="msgInput" placeholder="Type message here...">
-        <button onclick="sendMessage()">Send to Room</button>
+        <!-- Center Panel: Canvas -->
+        <div id="canvasArea" class="panel">
+            <!-- Increased Canvas Size to 800x600 -->
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+            <button id="clearBtn" onclick="requestClearCanvas()">🗑️ Clear Canvas</button>
+        </div>
+
+        <!-- Right Panel: Chat -->
+        <div id="chatArea" class="panel">
+            <h4 style="margin-bottom: 15px; color: var(--primary); font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">Live Chat</h4>
+            <div id="logs"></div>
+            <div class="chat-input-group">
+                <input type="text" id="msgInput" placeholder="Type a guess..." onkeypress="handleEnter(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -56,63 +292,87 @@
         // DOM Elements
         const logsDiv = document.getElementById('logs');
         const lobbyArea = document.getElementById('lobbyArea');
-        const chatArea = document.getElementById('chatArea');
+        const mainApp = document.getElementById('mainApp');
         const roomInfo = document.getElementById('roomInfo');
+        const gameArea = document.getElementById('gameArea');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const wordDisplay = document.getElementById('wordDisplay');
+        const roleDisplay = document.getElementById('roleDisplay');
+        const startBtn = document.getElementById('startBtn');
+        const scoreList = document.getElementById('scoreList');
 
-        // Helper to print colored logs
-        function logMessage(msg, type = 'system') {
-            logsDiv.innerHTML += `<div class="${type}">${msg}</div>`;
+        function logMessage(msg, type = 'system', senderName = '') {
+            const div = document.createElement('div');
+            div.className = `msg-block ${type}`;
+            if (senderName) {
+                div.innerHTML = `<strong>${senderName}:</strong> ${msg}`;
+            } else {
+                div.innerText = msg;
+            }
+            logsDiv.appendChild(div);
             logsDiv.scrollTop = logsDiv.scrollHeight;
         }
 
-        // Socket Connection
+        function handleEnter(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function enterRoomUI() {
+            lobbyArea.style.display = 'none';
+            mainApp.style.display = 'grid';
+        }
+
         socket.on("connect", () => {
-            logMessage(`[Connected] Socket ID: ${socket.id}`, 'system');
+            logMessage(`Connected to server.`, 'system');
         });
 
-        // Room Events
         socket.on("room_created", (data) => {
-            roomInfo.innerText = `Hosting Room: ${data.roomCode}`;
-            logMessage(`[Success] Room created: ${data.roomCode}`, 'room');
+            roomInfo.innerText = `Room Code: ${data.roomCode}`;
+            logMessage(`Room created. Share the code to invite others.`, 'room');
             enterRoomUI();  
         });
 
         socket.on("room_joined", (data) => {
-            roomInfo.innerText = `Connected to Room: ${data.roomCode}`;
-            logMessage(`[Success] Joined room: ${data.roomCode}`, 'room');
+            roomInfo.innerText = `Room Code: ${data.roomCode}`;
+            logMessage(`Joined room successfully.`, 'room');
             enterRoomUI();
+            startBtn.style.display = 'none'; 
         });
 
         socket.on("game_over", () => {
             startBtn.style.display = 'block';
-            roleDisplay.innerText = "Role: Waiting to start...";
-            wordDisplay.innerText = "Word: Waiting...";
-            timerDisplay.innerText = "Time: --";
+            roleDisplay.innerText = "Match Concluded";
+            roleDisplay.style.background = "rgba(255,255,255,0.05)";
+            roleDisplay.style.color = "inherit";
+            wordDisplay.innerText = "_ _ _ _";
+            timerDisplay.innerText = "--";
+            timerDisplay.classList.remove('time-low');
         });
+
         socket.on("player_joined", (data) => {
-            logMessage(`[Event] Player ${data.playerId} joined. (${data.playerCount}/5)`, 'room');
+            logMessage(`Player ${data.playerId.substring(0,5)} joined. (${data.playerCount}/5)`, 'room');
         });
 
         socket.on("player_left", (data) => {
-            logMessage(`[Event] Player ${data.playerId} disconnected. (${data.playerCount}/5)`, 'room');
+            logMessage(`Player ${data.playerId.substring(0,5)} disconnected. (${data.playerCount}/5)`, 'room');
         });
 
-        // Chat Events
         socket.on("receive_message", (data) => {
             const senderName = data.sender === socket.id ? "You" : data.sender.substring(0,5);
-            logMessage(`[${senderName}]: ${data.text}`, 'chat');
+            logMessage(data.text, 'chat', senderName);
+        });
+
+        socket.on("system_message", (data) => {
+            logMessage(data.text, data.type);
         });
 
         socket.on("error", (data) => {
-            logMessage(`[Error] ${data.message}`, 'error');
+            logMessage(data.message, 'error');
             alert(data.message);
         });
 
-        // Emit Actions
-        function createRoom() {
-            socket.emit("create_room");
-        }
-
+        function createRoom() { socket.emit("create_room"); }
+        
         function joinRoom() {
             const code = document.getElementById('roomInput').value.trim();
             if (!code) return alert("Room code cannot be empty.");
@@ -125,71 +385,77 @@
             socket.emit("send_message", { text: input.value.trim() });
             input.value = '';
         }
-        // New DOM Elements
-        const gameArea = document.getElementById('gameArea');
-        const timerDisplay = document.getElementById('timerDisplay');
-        const wordDisplay = document.getElementById('wordDisplay');
-        const roleDisplay = document.getElementById('roleDisplay');
-        const startBtn = document.getElementById('startBtn');
 
-        // Update enterRoomUI to show the game area
-        function enterRoomUI() {
-            lobbyArea.style.display = 'none';
-            chatArea.style.display = 'block';
-            gameArea.style.display = 'block';
-            document.getElementById('canvasArea').style.display = 'block';
-        }
+        function startGame() { socket.emit("start_game"); }
 
-        function startGame() {
-            socket.emit("start_game");
-        }
-
-        // Game Loop Events
         socket.on("round_start", (data) => {
-            startBtn.style.display = 'none'; // Hide start button once game begins
-            logsDiv.innerHTML = ''; // Clear chat for new round
+            startBtn.style.display = 'none';
+            logsDiv.innerHTML = ''; 
+            timerDisplay.classList.remove('time-low');
             
             if (socket.id === data.drawerId) {
-                roleDisplay.innerText = "Role: You are DRAWING!";
-                roleDisplay.style.color = "#4CAF50";
+                roleDisplay.innerText = "✏️ YOU ARE DRAWING";
+                roleDisplay.style.background = "rgba(249, 115, 22, 0.15)";
+                roleDisplay.style.borderColor = "var(--primary)";
+                roleDisplay.style.color = "var(--primary)";
             } else {
-                roleDisplay.innerText = "Role: You are GUESSING!";
-                roleDisplay.style.color = "#2196F3";
-                wordDisplay.innerText = `Word: ${"_ ".repeat(data.wordLength)}`;
+                roleDisplay.innerText = "🤔 YOU ARE GUESSING";
+                roleDisplay.style.background = "rgba(16, 185, 129, 0.15)";
+                roleDisplay.style.borderColor = "var(--accent)";
+                roleDisplay.style.color = "var(--accent)";
+                wordDisplay.innerText = "_ ".repeat(data.wordLength);
             }
-            logMessage(`[System] Round started!`, 'system');
+            logMessage(`Round started!`, 'system');
         });
 
         socket.on("drawer_word", (data) => {
-            wordDisplay.innerText = `Word to draw: ${data.word}`;
+            wordDisplay.innerText = data.word;
         });
 
         socket.on("time_update", (data) => {
-            timerDisplay.innerText = `Time: ${data.timeLeft}`;
+            timerDisplay.innerText = data.timeLeft;
+            if(data.timeLeft <= 10 && data.timeLeft > 0) {
+                timerDisplay.classList.add('time-low');
+            } else {
+                timerDisplay.classList.remove('time-low');
+            }
         });
 
         socket.on("round_end", (data) => {
-            logMessage(`[System] Round over! The word was: ${data.word}`, 'room');
-            wordDisplay.innerText = `Word: ${data.word}`;
+            timerDisplay.classList.remove('time-low');
+            logMessage(`Round over! The word was: ${data.word}`, 'room');
+            wordDisplay.innerText = data.word;
         });
 
-        // --- CANVAS & THROTTLING LOGIC ---
+        socket.on("update_scores", (scores) => {
+            scoreList.innerHTML = '';
+            const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            
+            sortedScores.forEach(([id, score], index) => {
+                const name = id === socket.id ? "You" : id.substring(0,5);
+                const li = document.createElement('li');
+                // Top player gets orange border
+                if (index === 0 && score > 0) {
+                    li.style.borderColor = "var(--primary)";
+                    li.style.color = "var(--primary)";
+                }
+                li.innerHTML = `<span>${name}</span> <span>${score}</span>`;
+                scoreList.appendChild(li);
+            });
+        });
+
+        // --- CANVAS LOGIC ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         let isDrawing = false;
-        let isMyTurn = false; // Prevents guessers from drawing
-        let lastX = 0;
-        let lastY = 0;
-
-        // The throttling queue
+        let isMyTurn = false;
+        let lastX = 0; let lastY = 0;
         let drawBatchQueue = [];
 
-        // Stroke styling
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 5;
         ctx.lineCap = 'round';
         ctx.strokeStyle = '#000000';
 
-        // Event Listeners for drawing
         canvas.addEventListener('mousedown', (e) => {
             if (!isMyTurn) return;
             isDrawing = true;
@@ -198,25 +464,23 @@
 
         canvas.addEventListener('mousemove', (e) => {
             if (!isDrawing || !isMyTurn) return;
-            
             const [currentX, currentY] = getMousePos(e);
-            
-            // 1. Draw locally instantly
             drawLine(lastX, lastY, currentX, currentY);
-            
-            // 2. Push to batch queue instead of emitting immediately
             drawBatchQueue.push({ x0: lastX, y0: lastY, x1: currentX, y1: currentY });
-            
             [lastX, lastY] = [currentX, currentY];
         });
 
         canvas.addEventListener('mouseup', () => isDrawing = false);
         canvas.addEventListener('mouseout', () => isDrawing = false);
 
-        // Helper to get relative mouse position inside the canvas
         function getMousePos(evt) {
             const rect = canvas.getBoundingClientRect();
-            return [evt.clientX - rect.left, evt.clientY - rect.top];
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return [
+                (evt.clientX - rect.left) * scaleX, 
+                (evt.clientY - rect.top) * scaleY
+            ];
         }
 
         function drawLine(x0, y0, x1, y1) {
@@ -227,23 +491,15 @@
             ctx.closePath();
         }
 
-        // THE THROTTLE LOOP: Runs every 30ms. 
-        // If there is data in the queue, emit it and clear the queue.
         setInterval(() => {
             if (drawBatchQueue.length > 0) {
                 socket.emit('draw_data', drawBatchQueue);
-                drawBatchQueue = []; // Empty the queue after sending
+                drawBatchQueue = [];
             }
         }, 30);
 
-        // --- SOCKET LISTENERS FOR CANVAS ---
-
-        // Receive batched lines from the drawer
         socket.on('draw_data', (batch) => {
-            // Loop through the batch and draw each segment
-            batch.forEach(segment => {
-                drawLine(segment.x0, segment.y0, segment.x1, segment.y1);
-            });
+            batch.forEach(segment => drawLine(segment.x0, segment.y0, segment.x1, segment.y1));
         });
 
         socket.on('clear_canvas', () => {
@@ -256,43 +512,14 @@
             socket.emit('clear_canvas');
         }
 
-        // Update the round_start listener to unlock/lock the canvas
         socket.on("round_start", (data) => {
-            startBtn.style.display = 'none';
-            logsDiv.innerHTML = '';
-            
             if (socket.id === data.drawerId) {
-                isMyTurn = true; // Unlock canvas
-                roleDisplay.innerText = "Role: You are DRAWING!";
-                roleDisplay.style.color = "#4CAF50";
+                isMyTurn = true;
+                canvas.style.cursor = 'crosshair';
             } else {
-                isMyTurn = false; // Lock canvas
-                roleDisplay.innerText = "Role: You are GUESSING!";
-                roleDisplay.style.color = "#2196F3";
-                wordDisplay.innerText = `Word: ${"_ ".repeat(data.wordLength)}`;
+                isMyTurn = false;
+                canvas.style.cursor = 'not-allowed';
             }
-            logMessage(`[System] Round started!`, 'system');
-        });
-
-        const scoreList = document.getElementById('scoreList');
-
-        // Listen for directed system messages (like "You are close!" or cheat warnings)
-        socket.on("system_message", (data) => {
-            logMessage(`[System] ${data.text}`, data.type);
-        });
-
-        // Update the leaderboard UI
-        socket.on("update_scores", (scores) => {
-            scoreList.innerHTML = '';
-            // Sort scores descending
-            const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            
-            sortedScores.forEach(([id, score]) => {
-                const name = id === socket.id ? "You" : id.substring(0,5);
-                const li = document.createElement('li');
-                li.innerText = `${name}: ${score}`;
-                scoreList.appendChild(li);
-            });
         });
     </script>
 </body>
