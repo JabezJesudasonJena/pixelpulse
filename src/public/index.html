@@ -34,6 +34,15 @@
         <h3 id="wordDisplay">Word: Waiting...</h3>
         <h4 id="roleDisplay">Role: Guesser</h4>
     </div>
+    <div id="leaderboard" style="float: right; width: 150px; background: #222; padding: 10px; border: 1px solid #444;">
+        <h4>Scores</h4>
+        <ul id="scoreList" style="list-style: none; padding: 0; margin: 0;"></ul>
+    </div>
+    <div id="canvasArea" style="display: none; margin-top: 20px;">
+        <canvas id="gameCanvas" width="600" height="400" style="background: white; border: 2px solid #333; cursor: crosshair;"></canvas>
+        <br>
+        <button id="clearBtn" onclick="requestClearCanvas()">Clear Canvas</button>
+    </div>
 
     <div id="chatArea">
         <div id="logs"></div>
@@ -74,6 +83,12 @@
             enterRoomUI();
         });
 
+        socket.on("game_over", () => {
+            startBtn.style.display = 'block';
+            roleDisplay.innerText = "Role: Waiting to start...";
+            wordDisplay.innerText = "Word: Waiting...";
+            timerDisplay.innerText = "Time: --";
+        });
         socket.on("player_joined", (data) => {
             logMessage(`[Event] Player ${data.playerId} joined. (${data.playerCount}/5)`, 'room');
         });
@@ -122,6 +137,7 @@
             lobbyArea.style.display = 'none';
             chatArea.style.display = 'block';
             gameArea.style.display = 'block';
+            document.getElementById('canvasArea').style.display = 'block';
         }
 
         function startGame() {
@@ -155,6 +171,128 @@
         socket.on("round_end", (data) => {
             logMessage(`[System] Round over! The word was: ${data.word}`, 'room');
             wordDisplay.innerText = `Word: ${data.word}`;
+        });
+
+        // --- CANVAS & THROTTLING LOGIC ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let isMyTurn = false; // Prevents guessers from drawing
+        let lastX = 0;
+        let lastY = 0;
+
+        // The throttling queue
+        let drawBatchQueue = [];
+
+        // Stroke styling
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#000000';
+
+        // Event Listeners for drawing
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isMyTurn) return;
+            isDrawing = true;
+            [lastX, lastY] = getMousePos(e);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !isMyTurn) return;
+            
+            const [currentX, currentY] = getMousePos(e);
+            
+            // 1. Draw locally instantly
+            drawLine(lastX, lastY, currentX, currentY);
+            
+            // 2. Push to batch queue instead of emitting immediately
+            drawBatchQueue.push({ x0: lastX, y0: lastY, x1: currentX, y1: currentY });
+            
+            [lastX, lastY] = [currentX, currentY];
+        });
+
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseout', () => isDrawing = false);
+
+        // Helper to get relative mouse position inside the canvas
+        function getMousePos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            return [evt.clientX - rect.left, evt.clientY - rect.top];
+        }
+
+        function drawLine(x0, y0, x1, y1) {
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        // THE THROTTLE LOOP: Runs every 30ms. 
+        // If there is data in the queue, emit it and clear the queue.
+        setInterval(() => {
+            if (drawBatchQueue.length > 0) {
+                socket.emit('draw_data', drawBatchQueue);
+                drawBatchQueue = []; // Empty the queue after sending
+            }
+        }, 30);
+
+        // --- SOCKET LISTENERS FOR CANVAS ---
+
+        // Receive batched lines from the drawer
+        socket.on('draw_data', (batch) => {
+            // Loop through the batch and draw each segment
+            batch.forEach(segment => {
+                drawLine(segment.x0, segment.y0, segment.x1, segment.y1);
+            });
+        });
+
+        socket.on('clear_canvas', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        function requestClearCanvas() {
+            if (!isMyTurn) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            socket.emit('clear_canvas');
+        }
+
+        // Update the round_start listener to unlock/lock the canvas
+        socket.on("round_start", (data) => {
+            startBtn.style.display = 'none';
+            logsDiv.innerHTML = '';
+            
+            if (socket.id === data.drawerId) {
+                isMyTurn = true; // Unlock canvas
+                roleDisplay.innerText = "Role: You are DRAWING!";
+                roleDisplay.style.color = "#4CAF50";
+            } else {
+                isMyTurn = false; // Lock canvas
+                roleDisplay.innerText = "Role: You are GUESSING!";
+                roleDisplay.style.color = "#2196F3";
+                wordDisplay.innerText = `Word: ${"_ ".repeat(data.wordLength)}`;
+            }
+            logMessage(`[System] Round started!`, 'system');
+        });
+
+        const scoreList = document.getElementById('scoreList');
+
+        // Listen for directed system messages (like "You are close!" or cheat warnings)
+        socket.on("system_message", (data) => {
+            logMessage(`[System] ${data.text}`, data.type);
+        });
+
+        // Update the leaderboard UI
+        socket.on("update_scores", (scores) => {
+            scoreList.innerHTML = '';
+            // Sort scores descending
+            const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            
+            sortedScores.forEach(([id, score]) => {
+                const name = id === socket.id ? "You" : id.substring(0,5);
+                const li = document.createElement('li');
+                li.innerText = `${name}: ${score}`;
+                scoreList.appendChild(li);
+            });
         });
     </script>
 </body>
