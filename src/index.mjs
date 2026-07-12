@@ -6,6 +6,9 @@ import cors from 'cors';
 const app = express();
 app.use(cors());
 
+// Serve the frontend HTML/CSS/JS files
+app.use(express.static('src/public'));
+
 const server = createServer(app);
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 

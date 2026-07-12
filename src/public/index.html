@@ -236,6 +236,51 @@
         @keyframes pulseTime { 0% { transform: scale(1); } 50% { transform: scale(1.15); color: var(--danger); text-shadow: 0 0 20px rgba(239, 68, 68, 0.5); } 100% { transform: scale(1); } }
         
         .time-low { animation: pulseTime 1s infinite; }
+        /* Drawing Tools */
+        .tools-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 12px;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--border);
+        }
+        .tool-group { display: flex; align-items: center; gap: 12px; }
+        .tool-group label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 0;
+            background: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid var(--border); border-radius: 50%; }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 120px;
+            height: 6px;
+            background: var(--surface-hover);
+            border-radius: 5px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -274,10 +319,21 @@
         </div>
 
         <!-- Center Panel: Canvas -->
+        <!-- Center Panel: Canvas -->
         <div id="canvasArea" class="panel">
-            <!-- Increased Canvas Size to 800x600 -->
+            <div id="drawingTools" class="tools-container">
+                <div class="tool-group">
+                    <label>Color</label>
+                    <input type="color" id="colorPicker" value="#000000">
+                </div>
+                <div class="tool-group">
+                    <label>Size</label>
+                    <input type="range" id="brushSize" min="2" max="30" value="5">
+                </div>
+                <button id="clearBtn" onclick="requestClearCanvas()">🗑️ Clear</button>
+            </div>
+            
             <canvas id="gameCanvas" width="800" height="600"></canvas>
-            <button id="clearBtn" onclick="requestClearCanvas()">🗑️ Clear Canvas</button>
         </div>
 
         <!-- Right Panel: Chat -->
@@ -293,7 +349,8 @@
     </div>
 
     <script>
-        const socket = io("http://localhost:3001");
+        // const socket = io("http://localhost:3001");
+        const socket = io();
         
         // DOM Elements
         const logsDiv = document.getElementById('logs');
